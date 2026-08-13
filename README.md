@@ -43,6 +43,32 @@ python -m othello.play --model othello_model.npz --human-color black
 - `d3` のように「列(a-h) + 行(1-8)」で着手を入力します。
 - `--human-color white` にすると白番でプレイできます。
 
+## デモ（CPU同士の対戦を観る）
+
+学習済みAI同士を対局させて眺めることもできます。
+
+### ターミナルで見る
+
+```bash
+python -m othello.demo --model othello_model.npz --delay 0.6 --games 3
+```
+
+`play.py` と同じ盤面表示で、AI同士が自動的に打ち合う様子を1手ずつ流します。
+`--delay` で1手あたりの待ち時間、`--epsilon` でランダム性（対局ごとに展開を
+変えるための確率、デフォルト0.1）を調整できます。
+
+### ブラウザで見る
+
+```bash
+python -m othello.export_demo_games --model othello_model.npz --games 5 --out demo_games.json --html demo.html
+```
+
+AI同士の対局を指定局数プレイし、棋譜（各局面の盤面・着手・スコア）を
+`demo_games.json` に書き出します。`--html` を付けると、その棋譜を埋め込んだ
+`demo.html` も一緒に生成されます。生成された `demo.html` はサーバー不要で、
+ブラウザでダブルクリックして開くだけで再生できます（再生/一時停止、1手ずつ
+送り、シークバー、5局からの選択、棋譜一覧つき）。
+
 ## 発展させるなら
 
 - `othello/agent.py` の `encode` に特徴量を足す（着手可能数の細分化、辺の

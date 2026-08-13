@@ -3,10 +3,11 @@ static web page can replay them move-by-move without needing to run Python
 or re-implement the game rules in JavaScript.
 
 Usage:
-    python -m othello.export_demo_games --model othello_model.npz --games 5 --out demo_games.json
+    python -m othello.export_demo_games --model othello_model.npz --games 5 --out demo_games.json --html demo.html
 """
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -84,6 +85,9 @@ def main():
                          help="chance of a random move, so games differ from each other")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", type=str, default="demo_games.json")
+    parser.add_argument("--html", type=str, default=None,
+                         help="also write a standalone HTML viewer to this path "
+                              "(embeds the game data, no server needed)")
     args = parser.parse_args()
 
     net = ValueNetwork(FEATURE_DIM)
@@ -91,11 +95,18 @@ def main():
     rng = np.random.default_rng(args.seed)
 
     games = [play_one_game(net, args.epsilon, rng) for _ in range(args.games)]
+    games_json = json.dumps({"games": games}, ensure_ascii=False)
 
     with open(args.out, "w", encoding="utf-8") as f:
-        json.dump({"games": games}, f, ensure_ascii=False)
-
+        f.write(games_json)
     print(f"Wrote {len(games)} games ({sum(len(g['steps']) for g in games)} total steps) to {args.out}")
+
+    if args.html:
+        template_path = Path(__file__).parent / "webdemo_template.html"
+        template = template_path.read_text(encoding="utf-8")
+        page = template.replace("__GAMES_DATA_JSON__", games_json)
+        Path(args.html).write_text(page, encoding="utf-8")
+        print(f"Wrote standalone viewer to {args.html} (open it directly in a browser)")
 
 
 if __name__ == "__main__":
