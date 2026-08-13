@@ -23,6 +23,43 @@ def format_progress_bar(frac, elapsed, total_episodes, done_episodes, width=20):
             f"経過{elapsed:.0f}s  残り約{eta:.0f}s   ")
 
 
+class ReplayBuffer:
+    """Fixed-size circular buffer of (feature, target) pairs for minibatch
+    training, decoupled from the single game that produced them."""
+
+    def __init__(self, capacity, feature_dim, rng):
+        self.capacity = capacity
+        self.features = np.empty((capacity, feature_dim))
+        self.targets = np.empty(capacity)
+        self.size = 0
+        self.pos = 0
+        self.rng = rng
+
+    def add(self, features, targets):
+        n = len(targets)
+        if n == 0:
+            return
+        if n > self.capacity:
+            features, targets = features[-self.capacity:], targets[-self.capacity:]
+            n = self.capacity
+        end = self.pos + n
+        if end <= self.capacity:
+            self.features[self.pos:end] = features
+            self.targets[self.pos:end] = targets
+        else:
+            first = self.capacity - self.pos
+            self.features[self.pos:] = features[:first]
+            self.targets[self.pos:] = targets[:first]
+            self.features[:end - self.capacity] = features[first:]
+            self.targets[:end - self.capacity] = targets[first:]
+        self.pos = end % self.capacity
+        self.size = min(self.size + n, self.capacity)
+
+    def sample(self, batch_size):
+        idx = self.rng.integers(0, self.size, size=min(batch_size, self.size))
+        return self.features[idx], self.targets[idx]
+
+
 def random_move(state, player, rng):
     moves = B.legal_moves(state, player)
     return moves[rng.integers(len(moves))] if moves else None
@@ -70,19 +107,32 @@ def main():
     parser.add_argument("--out", type=str, default="othello_model.npz")
     parser.add_argument("--epsilon-start", type=float, default=0.3)
     parser.add_argument("--epsilon-end", type=float, default=0.02)
+    parser.add_argument("--no-augment", action="store_true",
+                         help="盤面の回転・鏡映による8倍データ拡張を無効化する")
+    parser.add_argument("--replay-size", type=int, default=20000,
+                         help="経験リプレイバッファの容量（局面数）")
+    parser.add_argument("--batch-size", type=int, default=256,
+                         help="リプレイバッファからのミニバッチサイズ")
+    parser.add_argument("--train-steps", type=int, default=4,
+                         help="自己対戦1局あたりのミニバッチ学習回数")
     args = parser.parse_args()
 
     rng = np.random.default_rng(args.seed)
     net = ValueNetwork(FEATURE_DIM, hidden_dim=args.hidden, lr=args.lr, seed=args.seed)
+    buffer = ReplayBuffer(args.replay_size, FEATURE_DIM, rng)
 
     start = time.time()
     last_bar_write = 0.0
     for ep in range(1, args.episodes + 1):
         frac = ep / args.episodes
         epsilon = args.epsilon_start + (args.epsilon_end - args.epsilon_start) * frac
-        feats, targets, _ = play_self_play_game(net, epsilon, rng)
-        if len(feats):
-            net.train_step(feats, targets)
+        feats, targets, _ = play_self_play_game(net, epsilon, rng, augment=not args.no_augment)
+        buffer.add(feats, targets)
+
+        if buffer.size >= args.batch_size:
+            for _ in range(args.train_steps):
+                batch_feats, batch_targets = buffer.sample(args.batch_size)
+                net.train_step(batch_feats, batch_targets)
 
         elapsed = time.time() - start
         # 進捗バーの書き換えは0.1秒おきに間引いて、出力自体が学習を遅らせないようにする

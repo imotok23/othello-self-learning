@@ -51,22 +51,33 @@ def choose_move(board_state, player, net, epsilon, rng):
     return best_move
 
 
-def play_self_play_game(net, epsilon, rng):
+def _board_symmetries(board_state):
+    """The 8 board states equivalent under rotation/mirroring (dihedral group)."""
+    flipped = np.fliplr(board_state)
+    return [
+        board_state, np.rot90(board_state, 1), np.rot90(board_state, 2), np.rot90(board_state, 3),
+        flipped, np.rot90(flipped, 1), np.rot90(flipped, 2), np.rot90(flipped, 3),
+    ]
+
+
+def play_self_play_game(net, epsilon, rng, augment=True):
     """Play one game of the network against itself.
 
     Returns (features, targets, winner) where features/targets are arrays
-    ready to feed into ValueNetwork.train_step.
+    ready to feed into ValueNetwork.train_step. When `augment` is True, each
+    visited position is also encoded under its 7 rotated/mirrored variants
+    (the outcome is invariant to these, so this is free extra training data).
     """
     state = B.initial_board()
     player = B.BLACK
-    records = []  # (feature vector, player color at that position)
+    records = []  # (raw board state, player color at that position)
 
     while not B.is_game_over(state):
         moves = B.legal_moves(state, player)
         if not moves:
             player = -player
             continue
-        records.append((encode(state, player), player))
+        records.append((state, player))
         move = choose_move(state, player, net, epsilon, rng)
         state = B.apply_move(state, move, player)
         player = -player
@@ -75,9 +86,11 @@ def play_self_play_game(net, epsilon, rng):
     if not records:
         return np.empty((0, FEATURE_DIM)), np.empty((0,)), result
 
-    features = np.array([f for f, _ in records])
-    targets = np.array([
-        0.0 if result == B.EMPTY else (1.0 if result == p else -1.0)
-        for _, p in records
-    ])
-    return features, targets, result
+    feats, targets = [], []
+    for board_state, p in records:
+        y = 0.0 if result == B.EMPTY else (1.0 if result == p else -1.0)
+        for variant in (_board_symmetries(board_state) if augment else [board_state]):
+            feats.append(encode(variant, p))
+            targets.append(y)
+
+    return np.array(feats), np.array(targets), result
