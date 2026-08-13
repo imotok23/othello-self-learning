@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>オセロ棋譜再生</title>
+<style>
+  :root {
+    --bg: #F1F4EF;
+    --surface: #FFFFFF;
+    --surface-2: #E7ECE4;
+    --ink: #16211C;
+    --muted: #5B6B62;
+    --line: #D8DFD3;
+    --accent: #A9812E;
+    --accent-ink: #4A3A14;
+    --board: #1B4332;
+    --board-line: rgba(255, 255, 255, 0.16);
+    --board-edge: #12301F;
+    --disc-black-a: #3A3A3A;
+    --disc-black-b: #060606;
+    --disc-white-a: #FFFFFF;
+    --disc-white-b: #C9CDC5;
+    --shadow: 0 1px 2px rgba(15, 25, 18, 0.06), 0 8px 24px -12px rgba(15, 25, 18, 0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0E1511;
+      --surface: #172019;
+      --surface-2: #1E2921;
+      --ink: #ECEEE6;
+      --muted: #8B978E;
+      --line: #2A342C;
+      --accent: #D4AF37;
+      --accent-ink: #1C1608;
+      --board: #204E3B;
+      --board-line: rgba(255, 255, 255, 0.14);
+      --board-edge: #0F2A1C;
+      --disc-black-a: #4A4A4A;
+      --disc-black-b: #050505;
+      --disc-white-a: #FFFFFF;
+      --disc-white-b: #B9BEB5;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -14px rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0E1511;
+    --surface: #172019;
+    --surface-2: #1E2921;
+    --ink: #ECEEE6;
+    --muted: #8B978E;
+    --line: #2A342C;
+    --accent: #D4AF37;
+    --accent-ink: #1C1608;
+    --board: #204E3B;
+    --board-line: rgba(255, 255, 255, 0.14);
+    --board-edge: #0F2A1C;
+    --disc-black-a: #4A4A4A;
+    --disc-black-b: #050505;
+    --disc-white-a: #FFFFFF;
+    --disc-white-b: #B9BEB5;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -14px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "游ゴシック体", "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 40px 24px 72px;
+  }
+
+  header.masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 4px 10px;
+    border-radius: 3px;
+  }
+  :root:not([data-theme="light"]) .eyebrow,
+  :root[data-theme="dark"] .eyebrow { color: var(--accent); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .eyebrow { color: var(--accent); }
+  }
+
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", "URW Palladio L", Georgia, "游明朝", "Yu Mincho", "Hiragino Mincho ProN", serif;
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 38px);
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: 0.01em;
+  }
+
+  .lede {
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 15px;
+    margin: 0;
+  }
+
+  .lede code {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .chip {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--ink); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chip.active {
+    background: var(--board);
+    border-color: var(--board);
+    color: #EFEFE9;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) minmax(280px, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  @media (max-width: 860px) {
+    .stage { grid-template-columns: 1fr; }
+  }
+
+  .board-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+
+  .board-frame {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    grid-template-rows: 1fr 20px;
+    gap: 4px;
+  }
+
+  .col-labels, .row-labels {
+    display: grid;
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .col-labels {
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: repeat(8, 1fr);
+    text-align: center;
+  }
+  .row-labels {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-rows: repeat(8, 1fr);
+    align-items: center;
+    justify-items: center;
+  }
+
+  .board {
+    grid-column: 2;
+    grid-row: 1;
+    aspect-ratio: 1;
+    background: var(--board);
+    border: 10px solid var(--board-edge);
+    border-radius: 4px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+  .board.no-anim .disc, .board.no-anim .disc-slot { transition: none !important; }
+
+  .cell {
+    position: relative;
+    border: 0.5px solid var(--board-line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cell.last-move::after {
+    content: "";
+    position: absolute;
+    inset: 14%;
+    border: 1.5px solid var(--accent);
+    border-radius: 50%;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  .disc-slot {
+    width: 80%;
+    aspect-ratio: 1;
+    opacity: 0;
+    transform: scale(0.35);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    perspective: 240px;
+  }
+  .disc-slot.visible { opacity: 1; transform: scale(1); }
+
+  .disc {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.5s cubic-bezier(0.4, 0.1, 0.2, 1);
+  }
+  .disc.white { transform: rotateY(180deg); }
+
+  .face {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    backface-visibility: hidden;
+  }
+  .face-black {
+    background: radial-gradient(circle at 32% 28%, var(--disc-black-a), var(--disc-black-b) 70%);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5);
+  }
+  .face-white {
+    background: radial-gradient(circle at 32% 28%, var(--disc-white-a), var(--disc-white-b) 78%);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
+    transform: rotateY(180deg);
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+
+  .status-line {
+    font-size: 14px;
+    min-height: 22px;
+    color: var(--ink);
+  }
+  .status-line .muted { color: var(--muted); }
+
+  .score-row {
+    display: flex;
+    gap: 18px;
+    margin: 12px 0 10px;
+  }
+  .score-item { flex: 1; }
+  .score-item .label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+  .score-item .swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block;
+  }
+  .swatch.black { background: radial-gradient(circle at 32% 28%, var(--disc-black-a), var(--disc-black-b) 70%); }
+  .swatch.white { background: radial-gradient(circle at 32% 28%, var(--disc-white-a), var(--disc-white-b) 78%); border: 1px solid var(--line); }
+  .score-item .num {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 26px;
+    font-weight: 600;
+  }
+
+  .score-bar {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--disc-white-b);
+    overflow: hidden;
+    display: flex;
+  }
+  .score-bar .fill-black {
+    background: linear-gradient(90deg, var(--disc-black-a), var(--disc-black-b));
+    height: 100%;
+    transition: width 0.3s ease;
+  }
+
+  .move-count {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+
+  .transport {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  button.ctrl {
+    font-family: inherit;
+    font-size: 15px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink);
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  button.ctrl:hover { border-color: var(--accent); }
+  button.ctrl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.ctrl.play { width: 52px; background: var(--board); color: #EFEFE9; border-color: var(--board); }
+
+  .scrubber {
+    width: 100%;
+    margin-top: 12px;
+    accent-color: var(--accent);
+  }
+
+  .speed-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .speed-btn {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    padding: 5px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .speed-btn:hover { color: var(--ink); border-color: var(--accent); }
+  .speed-btn.active { background: var(--board); border-color: var(--board); color: #EFEFE9; }
+  .speed-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .kifu-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .kifu-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .kifu-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    border-top: 1px solid var(--line);
+  }
+  .kifu-list li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .kifu-list button {
+    all: unset;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 4px;
+  }
+  .kifu-list button:hover { background: var(--surface-2); }
+  .kifu-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .kifu-list li.active button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .kifu-idx {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--muted);
+    width: 2.2em;
+    text-align: right;
+    flex: none;
+  }
+  .kifu-move {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    width: 2.4em;
+    flex: none;
+  }
+  .kifu-color {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  footer.note {
+    margin-top: 36px;
+    color: var(--muted);
+    font-size: 12.5px;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .disc, .disc-slot, .chip, .speed-btn, .score-bar .fill-black { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <span class="eyebrow">Self-play demo</span>
+    <h1>オセロ棋譜再生</h1>
+    <p class="lede">
+      学習済みの価値関数ネットワーク同士を対局させ、その棋譜をあらかじめ記録したものです。
+      毎回同じ展開にならないよう <code>ε=0.1</code> の確率でランダムな手も混ぜています。
+      下のチップで5局の中から選んで再生できます。
+    </p>
+  </header>
+
+  <div class="chips" id="gameChips"></div>
+
+  <div class="stage">
+    <div class="board-card">
+      <div class="board-frame">
+        <div class="row-labels" id="rowLabels"></div>
+        <div class="board" id="board"></div>
+        <div class="col-labels" id="colLabels"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="card">
+        <div class="status-line" id="statusLine">読み込み中…</div>
+        <div class="score-row">
+          <div class="score-item">
+            <div class="label"><span class="swatch black"></span>黒</div>
+            <div class="num" id="blackScore">2</div>
+          </div>
+          <div class="score-item">
+            <div class="label"><span class="swatch white"></span>白</div>
+            <div class="num" id="whiteScore">2</div>
+          </div>
+        </div>
+        <div class="score-bar"><div class="fill-black" id="scoreBarFill" style="width:50%"></div></div>
+        <div class="move-count" id="moveCount">0 / 0手</div>
+
+        <input class="scrubber" id="scrubber" type="range" min="0" max="0" value="0" step="1" aria-label="手数を選択">
+
+        <div class="transport">
+          <button class="ctrl" id="btnRestart" title="最初へ" aria-label="最初へ">⏮</button>
+          <button class="ctrl" id="btnPrev" title="1手戻る" aria-label="1手戻る">◀</button>
+          <button class="ctrl play" id="btnPlay" title="再生 / 一時停止" aria-label="再生・一時停止">▶</button>
+          <button class="ctrl" id="btnNext" title="1手進む" aria-label="1手進む">▶|</button>
+        </div>
+        <div class="speed-row" id="speedRow"></div>
+      </div>
+
+      <div class="card kifu-card">
+        <div class="kifu-title">棋譜</div>
+        <ul class="kifu-list" id="kifuList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <footer class="note">
+    NumPyのみで実装した自己対戦強化学習オセロAI（<code>othello/</code>）の対局ログを再生しています。学習コードは同じリポジトリの <code>train.py</code> / <code>agent.py</code> にあります。
+  </footer>
+</div>
+
+<script>
+  const GAMES = {"games": [{"result": "black", "steps": [{"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": null, "move": null, "passed": false, "black": 2, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e6", "passed": false, "black": 4, "white": 1}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f4", "passed": false, "black": 3, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f3", "passed": false, "black": 5, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f2", "passed": false, "black": 4, "white": 4}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, 1, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g3", "passed": false, "black": 6, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, -1, 0], [0, 0, 0, -1, 1, 1, 0, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "h4", "passed": false, "black": 5, "white": 5}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, 0], [0, 0, 0, -1, 1, 1, 0, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f1", "passed": false, "black": 8, "white": 3}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, 0], [0, 0, 0, -1, -1, -1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g4", "passed": false, "black": 6, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0, 1, 1, 0], [0, 0, 0, -1, -1, 1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h2", "passed": false, "black": 9, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, 1], [0, 0, 0, 0, 0, -1, -1, 0], [0, 0, 0, -1, -1, 1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g2", "passed": false, "black": 7, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0, 1, 1, 1], [0, 0, 0, 0, 0, 1, -1, 0], [0, 0, 0, -1, 1, 1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h1", "passed": false, "black": 11, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, 1], [0, 0, 0, 0, 0, -1, -1, 0], [0, 0, 0, -1, 1, 1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e2", "passed": false, "black": 10, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, 1], [0, 0, 0, 0, 0, -1, -1, 0], [0, 0, 1, 1, 1, 1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c4", "passed": false, "black": 12, "white": 5}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, 1], [0, 0, 0, 0, 0, -1, -1, 0], [0, -1, -1, -1, -1, -1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "b4", "passed": false, "black": 8, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, 1], [0, 0, 0, 0, 1, -1, -1, 0], [0, -1, -1, -1, 1, -1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e3", "passed": false, "black": 10, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, -1, 1], [0, 0, 0, 0, -1, -1, -1, 1], [0, 0, 0, 0, -1, -1, -1, 0], [0, -1, -1, -1, 1, -1, -1, -1], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g1", "passed": false, "black": 7, "white": 13}, {"board": [[0, 0, 0, 0, 0, 1, -1, 1], [0, 0, 0, 0, -1, 1, -1, 1], [0, 0, 0, 0, -1, 1, -1, 0], [0, -1, -1, -1, 1, 1, -1, -1], [0, 0, 0, 1, 1, 1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f5", "passed": false, "black": 11, "white": 10}, {"board": [[0, 0, 0, 0, -1, -1, -1, 1], [0, 0, 0, 0, -1, -1, -1, 1], [0, 0, 0, 0, -1, 1, -1, 0], [0, -1, -1, -1, 1, 1, -1, -1], [0, 0, 0, 1, 1, 1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e1", "passed": false, "black": 9, "white": 13}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 0, 1, -1, -1, 1], [0, 0, 0, 0, -1, 1, -1, 0], [0, -1, -1, -1, 1, 1, -1, -1], [0, 0, 0, 1, 1, 1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d1", "passed": false, "black": 14, "white": 9}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 0, 1, -1, -1, 1], [0, 0, 0, 0, -1, -1, -1, 0], [0, -1, -1, -1, 1, -1, -1, -1], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f6", "passed": false, "black": 10, "white": 14}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 0, 1, 1, -1, 1], [0, 0, 0, 0, 1, -1, -1, 0], [0, -1, -1, 1, 1, -1, -1, -1], [0, 0, 1, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c5", "passed": false, "black": 14, "white": 11}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, 0, -1, -1, -1, 0], [0, -1, -1, 1, 1, -1, -1, -1], [0, 0, 1, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d2", "passed": false, "black": 11, "white": 15}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, 0, -1, -1, 1, 0], [0, -1, -1, 1, 1, 1, -1, -1], [0, 0, 1, 1, 1, -1, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d6", "passed": false, "black": 15, "white": 12}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, 0, -1, -1, 1, 0], [0, -1, -1, 1, -1, 1, -1, -1], [0, 0, -1, 1, -1, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e7", "passed": false, "black": 10, "white": 18}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 1], [0, 0, 0, 0, 1, -1, 1, 0], [0, -1, -1, 1, 1, 1, -1, -1], [0, 0, -1, 1, 1, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "e8", "passed": false, "black": 17, "white": 12}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 1], [0, 0, -1, 0, 1, -1, 1, 0], [0, -1, -1, -1, 1, 1, -1, -1], [0, 0, -1, 1, -1, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "c3", "passed": false, "black": 15, "white": 15}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 1], [0, 0, -1, 0, 1, -1, 1, 0], [0, -1, -1, -1, 1, 1, 1, -1], [0, 0, -1, 1, 1, 1, 1, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "g5", "passed": false, "black": 20, "white": 11}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 1], [0, 0, -1, 0, 1, -1, 1, 0], [0, -1, -1, -1, 1, 1, 1, -1], [0, 0, -1, 1, 1, 1, 1, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0]], "mover": "white", "move": "f8", "passed": false, "black": 19, "white": 13}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 1], [0, 0, -1, 0, 1, -1, 1, 0], [0, -1, -1, -1, 1, 1, 1, -1], [0, 0, -1, 1, 1, 1, 1, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "d8", "passed": false, "black": 21, "white": 12}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 1], [0, 0, -1, 0, -1, -1, 1, 0], [0, -1, -1, -1, 1, -1, 1, -1], [0, 0, -1, 1, 1, 1, -1, 0], [0, 0, 0, -1, 1, 1, 0, -1], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "h6", "passed": false, "black": 18, "white": 16}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, 1, 1], [0, 0, -1, 0, -1, -1, 1, 1], [0, -1, -1, -1, 1, -1, 1, -1], [0, 0, -1, 1, 1, 1, -1, 0], [0, 0, 0, -1, 1, 1, 0, -1], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "h3", "passed": false, "black": 20, "white": 15}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, 1, 1], [0, 0, -1, 0, -1, -1, 1, 1], [0, -1, -1, -1, 1, -1, -1, -1], [0, 0, -1, 1, 1, 1, -1, -1], [0, 0, 0, -1, 1, 1, 0, -1], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "h5", "passed": false, "black": 19, "white": 17}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, 1, 1], [0, 0, -1, 0, -1, -1, 1, 1], [0, -1, -1, -1, 1, -1, -1, -1], [0, 0, -1, 1, 1, 1, -1, -1], [0, 0, 1, 1, 1, 1, 0, -1], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "c6", "passed": false, "black": 21, "white": 16}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, 1, 1], [0, 0, -1, 0, -1, -1, 1, 1], [0, -1, -1, -1, 1, -1, -1, -1], [0, 0, -1, 1, 1, 1, -1, -1], [0, 0, 1, 1, 1, 1, 0, -1], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "c8", "passed": false, "black": 19, "white": 19}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, 1, 1], [0, 0, -1, 0, -1, -1, 1, 1], [0, -1, -1, -1, 1, -1, -1, 1], [0, 0, -1, 1, 1, 1, -1, 1], [0, 0, 1, 1, 1, 1, 0, 1], [0, 0, 0, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "h7", "passed": false, "black": 23, "white": 16}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, -1, 1, 1], [0, 0, -1, 0, -1, -1, 1, 1], [0, -1, -1, -1, 1, -1, -1, 1], [0, 0, -1, 1, -1, 1, -1, 1], [0, 0, -1, -1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "c7", "passed": false, "black": 20, "white": 20}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, -1, 0, 1, -1, 1, 1], [0, -1, -1, 1, 1, -1, -1, 1], [0, 0, 1, 1, -1, 1, -1, 1], [0, 1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b6", "passed": false, "black": 27, "white": 14}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, -1, 0, 1, -1, 1, 1], [0, -1, -1, 1, 1, -1, -1, 1], [-1, 0, 1, 1, -1, 1, -1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "a5", "passed": false, "black": 26, "white": 16}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 1, -1, 0, 1, -1, 1, 1], [0, -1, 1, 1, 1, -1, -1, 1], [-1, 0, 1, 1, -1, 1, -1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b3", "passed": false, "black": 28, "white": 15}, {"board": [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 1, -1, -1, -1, -1, 1, 1], [0, -1, 1, 1, 1, -1, -1, 1], [-1, 0, 1, 1, -1, 1, -1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "d3", "passed": false, "black": 27, "white": 17}, {"board": [[0, 0, 1, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, 1, 1, 1], [0, 1, -1, -1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "c1", "passed": false, "black": 32, "white": 13}, {"board": [[0, 0, 1, 1, 1, 1, 1, 1], [0, -1, 0, 1, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b2", "passed": false, "black": 31, "white": 15}, {"board": [[1, 0, 1, 1, 1, 1, 1, 1], [0, 1, 0, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a1", "passed": false, "black": 34, "white": 13}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, 0, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b1", "passed": false, "black": 33, "white": 15}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, 0, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 0, 1], [0, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a6", "passed": false, "black": 35, "white": 14}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, 0, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 0, 1], [-1, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "a7", "passed": false, "black": 34, "white": 16}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 1, 1], [0, -1, 1, 1, 1, -1, 1, 1], [0, -1, 1, 1, 1, 1, -1, 1], [-1, 0, 1, 1, -1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 0, 1], [-1, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "c2", "passed": false, "black": 36, "white": 15}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, 1, 1, -1, 1, -1, 1], [-1, 0, 1, 1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, 1], [-1, 0, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "g6", "passed": false, "black": 26, "white": 26}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, 1, 1, -1, 1, -1, 1], [-1, 0, 1, 1, -1, -1, -1, 1], [-1, -1, 1, -1, -1, -1, -1, 1], [-1, 1, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b7", "passed": false, "black": 28, "white": 25}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, -1, 1, -1, 1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, 1], [-1, -1, 1, -1, -1, -1, -1, 1], [-1, 1, -1, 0, 1, 0, 0, 1], [0, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b5", "passed": false, "black": 25, "white": 29}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, -1, 1, -1, 1, -1, 1], [-1, -1, -1, -1, 1, -1, -1, 1], [-1, -1, 1, 1, -1, -1, -1, 1], [-1, 1, 1, 0, 1, 0, 0, 1], [0, 1, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b8", "passed": false, "black": 29, "white": 26}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, -1, 1, 1], [0, -1, -1, 1, -1, 1, -1, 1], [-1, -1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, 1], [-1, -1, -1, -1, 1, 0, 0, 1], [0, 1, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "d7", "passed": false, "black": 25, "white": 31}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, -1, 1], [-1, -1, -1, 1, 1, -1, -1, 1], [-1, -1, 1, -1, -1, -1, -1, 1], [-1, 1, -1, -1, 1, 0, 0, 1], [1, 1, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a8", "passed": false, "black": 31, "white": 26}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, -1, 1, -1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, -1, 1], [-1, -1, -1, 1, 1, -1, -1, 1], [-1, -1, 1, -1, -1, -1, -1, 1], [-1, 1, -1, -1, -1, -1, 0, 1], [1, 1, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "f7", "passed": false, "black": 30, "white": 28}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 1, 1], [0, 1, 1, -1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, -1, -1, -1, 1], [1, 1, -1, -1, -1, -1, 0, 1], [1, 1, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a4", "passed": false, "black": 39, "white": 20}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 1, 1], [-1, -1, -1, -1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, -1, -1, -1, 1], [1, 1, -1, -1, -1, -1, 0, 1], [1, 1, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "a3", "passed": false, "black": 36, "white": 24}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, -1, -1, -1, 1], [1, 1, -1, -1, -1, -1, 0, 1], [1, 1, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a2", "passed": false, "black": 40, "white": 21}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, -1, -1, -1, 1], [1, 1, -1, -1, -1, -1, 0, 1], [1, 1, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": null, "passed": true, "black": 40, "white": 21}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, 1, -1, -1, 1], [1, 1, -1, -1, -1, 1, 0, 1], [1, 1, 1, 1, 1, 1, 1, 0]], "mover": "black", "move": "g8", "passed": false, "black": 47, "white": 15}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, 1, -1, -1, 1], [1, 1, -1, -1, -1, -1, -1, 1], [1, 1, 1, 1, 1, 1, 1, 0]], "mover": "white", "move": "g7", "passed": false, "black": 46, "white": 17}, {"board": [[1, -1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, -1, 1], [1, 1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, 1, 1, -1, 1], [1, 1, -1, -1, -1, -1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "black", "move": "h8", "passed": false, "black": 49, "white": 15}]}, {"result": "white", "steps": [{"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": null, "move": null, "passed": false, "black": 2, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e6", "passed": false, "black": 4, "white": 1}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f4", "passed": false, "black": 3, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f3", "passed": false, "black": 5, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f2", "passed": false, "black": 4, "white": 4}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 1, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g2", "passed": false, "black": 6, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "h2", "passed": false, "black": 5, "white": 5}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, -1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c3", "passed": false, "black": 7, "white": 4}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, -1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "c4", "passed": false, "black": 5, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f1", "passed": false, "black": 7, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e2", "passed": false, "black": 6, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h1", "passed": false, "black": 8, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "c6", "passed": false, "black": 7, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, -1, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 1, 0, 1, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "b7", "passed": false, "black": 11, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, -1], [0, 0, 1, 0, 0, -1, 0, 0], [0, 0, -1, -1, 1, -1, -1, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 1, 0, 1, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g4", "passed": false, "black": 10, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, -1], [0, 0, 1, 0, 0, -1, 0, 0], [0, 0, 1, -1, 1, -1, -1, 0], [0, 0, 1, 1, 1, 0, 0, 0], [0, 0, 1, 0, 1, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c5", "passed": false, "black": 12, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, -1], [0, 0, 1, 0, 0, -1, 0, 0], [0, 0, 1, -1, 1, -1, -1, 0], [0, 0, 1, 1, -1, 0, 0, 0], [0, 0, 1, 0, 1, -1, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f6", "passed": false, "black": 11, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, 0, 1, -1, 1, 1, -1, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 1, 0, 1, -1, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f5", "passed": false, "black": 16, "white": 5}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [0, -1, -1, -1, 1, 1, -1, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 1, 0, 1, -1, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "b4", "passed": false, "black": 15, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 1, 0, 1, -1, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "a4", "passed": false, "black": 19, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 1, -1, -1, -1, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d6", "passed": false, "black": 18, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, 1, 1, -1], [0, 0, 1, 0, 0, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, -1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d7", "passed": false, "black": 21, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 0, 1, 0, 0], [1, 1, 1, -1, 1, 1, -1, 0], [0, 0, 1, 1, -1, 1, 0, 0], [0, 0, 1, 1, 1, -1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "b2", "passed": false, "black": 18, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, 1, 0, 0], [0, 0, 1, 1, 1, -1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e3", "passed": false, "black": 20, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, -1, 0, 0], [0, 0, 1, 1, -1, -1, 0, 0], [0, 1, 0, -1, 0, 0, 0, 0], [0, 0, -1, 0, 0, 0, 0, 0]], "mover": "white", "move": "c8", "passed": false, "black": 17, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, -1, 0, 0], [0, 0, 1, 1, -1, -1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0]], "mover": "black", "move": "e8", "passed": false, "black": 19, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, -1, 0, 0], [-1, 0, 1, 1, -1, -1, 0, 0], [0, -1, 0, 1, 0, 0, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0]], "mover": "white", "move": "a6", "passed": false, "black": 18, "white": 12}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, -1, 0, 0], [-1, 0, 1, 1, -1, -1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0], [1, 0, -1, 0, 1, 0, 0, 0]], "mover": "black", "move": "a8", "passed": false, "black": 20, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, -1, 0], [1, 1, 1, 1, 1, -1, -1, 0], [0, 0, 1, 1, -1, -1, 0, 0], [-1, 0, 1, 1, -1, -1, 0, 0], [0, 1, 0, 1, 0, 0, 0, 0], [1, 0, -1, 0, 1, 0, 0, 0]], "mover": "white", "move": "g3", "passed": false, "black": 19, "white": 13}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, 0, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, 1, 0, 0], [-1, 0, 1, 1, 1, 1, 0, 0], [0, 1, 0, 1, 0, 1, 0, 0], [1, 0, -1, 0, 1, 0, 0, 0]], "mover": "black", "move": "f7", "passed": false, "black": 24, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, -1, 0, 0, -1, 1, 1, -1], [0, 0, -1, -1, -1, -1, -1, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, 1, 0, 0], [-1, 0, 1, 1, 1, 1, 0, 0], [0, 1, 0, 1, 0, 1, 0, 0], [1, 0, -1, 0, 1, 0, 0, 0]], "mover": "white", "move": "d3", "passed": false, "black": 22, "white": 12}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, 0, -1, 1, 1, -1], [0, 0, 1, -1, -1, -1, -1, 0], [1, 1, 1, 1, 1, 1, -1, 0], [0, 0, 1, 1, -1, 1, 0, 0], [-1, 0, 1, 1, 1, 1, 0, 0], [0, 1, 0, 1, 0, 1, 0, 0], [1, 0, -1, 0, 1, 0, 0, 0]], "mover": "black", "move": "a1", "passed": false, "black": 25, "white": 10}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, 0, -1, 1, 1, -1], [0, 0, 1, -1, -1, -1, -1, 0], [1, 1, 1, -1, 1, 1, -1, 0], [0, 0, 1, -1, -1, 1, 0, 0], [-1, 0, 1, -1, 1, 1, 0, 0], [0, 1, 0, -1, 0, 1, 0, 0], [1, 0, -1, -1, 1, 0, 0, 0]], "mover": "white", "move": "d8", "passed": false, "black": 21, "white": 15}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, 0, -1, 1, 1, 1], [0, 0, 1, 1, 1, 1, 1, 1], [1, 1, 1, -1, 1, 1, 1, 0], [0, 0, 1, -1, -1, 1, 0, 0], [-1, 0, 1, -1, 1, 1, 0, 0], [0, 1, 0, -1, 0, 1, 0, 0], [1, 0, -1, -1, 1, 0, 0, 0]], "mover": "black", "move": "h3", "passed": false, "black": 28, "white": 9}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [0, 0, 1, -1, 1, 1, 1, 1], [1, 1, 1, -1, 1, 1, 1, 0], [0, 0, 1, -1, -1, 1, 0, 0], [-1, 0, 1, -1, 1, 1, 0, 0], [0, 1, 0, -1, 0, 1, 0, 0], [1, 0, -1, -1, 1, 0, 0, 0]], "mover": "white", "move": "d2", "passed": false, "black": 27, "white": 11}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [0, 0, 1, -1, 1, 1, 1, 1], [1, 1, 1, -1, 1, 1, 1, 0], [0, 0, 1, -1, -1, 1, 0, 0], [-1, 0, 1, 1, 1, 1, 0, 0], [0, 1, 0, -1, 1, 1, 0, 0], [1, 0, -1, -1, 1, 0, 0, 0]], "mover": "black", "move": "e7", "passed": false, "black": 29, "white": 10}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [0, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, 1, -1, 1, 0], [0, 0, 1, -1, -1, -1, -1, 0], [-1, 0, 1, 1, 1, -1, 0, 0], [0, 1, 0, -1, -1, 1, 0, 0], [1, 0, -1, -1, 1, 0, 0, 0]], "mover": "white", "move": "g5", "passed": false, "black": 24, "white": 16}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [0, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, 1, -1, 1, 0], [0, 0, 1, -1, -1, -1, -1, 0], [-1, 0, 1, 1, 1, -1, 0, 0], [0, 1, 1, 1, 1, 1, 0, 0], [1, 0, -1, -1, 1, 0, 0, 0]], "mover": "black", "move": "c7", "passed": false, "black": 27, "white": 14}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [0, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, 1, -1, 1, 0], [0, 0, 1, -1, -1, -1, -1, 0], [-1, 0, 1, 1, 1, -1, 0, 0], [0, 1, 1, 1, 1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "f8", "passed": false, "black": 25, "white": 17}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [0, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, 1, -1, 1, 0], [0, 0, 1, 1, 1, 1, 1, 1], [-1, 0, 1, 1, 1, -1, 0, 0], [0, 1, 1, 1, 1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "h5", "passed": false, "black": 30, "white": 13}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [0, 1, 0, -1, -1, 1, 1, 1], [-1, 0, 1, -1, -1, 1, 1, 1], [1, -1, 1, -1, 1, -1, 1, 0], [0, 0, -1, 1, 1, 1, 1, 1], [-1, 0, 1, -1, 1, -1, 0, 0], [0, 1, 1, 1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "a3", "passed": false, "black": 26, "white": 18}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, 0, -1, -1, 1, 1, 1], [1, 0, 1, -1, -1, 1, 1, 1], [1, -1, 1, -1, 1, -1, 1, 0], [0, 0, -1, 1, 1, 1, 1, 1], [-1, 0, 1, -1, 1, -1, 0, 0], [0, 1, 1, 1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a2", "passed": false, "black": 28, "white": 17}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, 0, -1, -1, 1, 1, 1], [1, 0, 1, -1, -1, 1, 1, 1], [1, -1, 1, -1, 1, -1, 1, 0], [0, 0, -1, 1, 1, 1, 1, 1], [-1, 0, 1, -1, 1, -1, 0, 0], [-1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "a7", "passed": false, "black": 25, "white": 21}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, 0, -1, -1, 1, 1, 1], [1, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, 1, -1, 1, 0], [1, 0, -1, 1, 1, 1, 1, 1], [1, 0, 1, -1, 1, -1, 0, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a5", "passed": false, "black": 29, "white": 18}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, 0, -1, -1, 1, 1, 1], [1, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, -1, -1, 1, 0], [1, 0, -1, 1, 1, -1, 1, 1], [1, 0, 1, -1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "g6", "passed": false, "black": 27, "white": 21}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, 0, -1, -1, 1, 1, 1], [1, 0, 1, -1, -1, 1, 1, 1], [1, 1, 1, -1, -1, -1, 1, 0], [1, 1, 1, 1, 1, -1, 1, 1], [1, 0, 1, -1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b5", "passed": false, "black": 29, "white": 20}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, -1, -1, -1, 1, 1, 1], [1, 0, -1, -1, -1, 1, 1, 1], [1, 1, -1, -1, -1, -1, 1, 0], [1, 1, -1, 1, 1, -1, 1, 1], [1, 0, -1, -1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "c2", "passed": false, "black": 25, "white": 25}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, -1, -1, -1, 1, 1, 1], [1, 0, -1, -1, 1, 1, 1, 1], [1, 1, -1, 1, -1, -1, 1, 0], [1, 1, 1, 1, 1, -1, 1, 1], [1, 1, 1, 1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b6", "passed": false, "black": 31, "white": 20}, {"board": [[1, 0, 0, 0, 0, 1, 0, 1], [1, 1, -1, -1, -1, 1, 1, 1], [1, -1, -1, -1, 1, 1, 1, 1], [1, -1, -1, 1, -1, -1, 1, 0], [1, -1, 1, 1, 1, -1, 1, 1], [1, -1, 1, 1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b3", "passed": false, "black": 28, "white": 24}, {"board": [[1, 0, 1, 0, 0, 1, 0, 1], [1, 1, 1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, 1, -1, 1, 1], [1, -1, 1, 1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "c1", "passed": false, "black": 33, "white": 20}, {"board": [[1, -1, 1, 0, 0, 1, 0, 1], [1, -1, -1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, 1, -1, 1, 1], [1, -1, 1, 1, 1, -1, -1, 0], [1, -1, -1, -1, -1, -1, 0, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b1", "passed": false, "black": 31, "white": 23}, {"board": [[1, -1, 1, 0, 0, 1, 0, 1], [1, -1, -1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, 1, -1, 1, 1], [1, -1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0], [1, 0, -1, -1, -1, -1, 0, 0]], "mover": "black", "move": "g7", "passed": false, "black": 39, "white": 16}, {"board": [[1, -1, 1, 0, 0, 1, 0, 1], [1, -1, -1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, -1, -1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 0], [1, -1, -1, 1, 1, 1, 1, 0], [1, -1, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b8", "passed": false, "black": 35, "white": 21}, {"board": [[1, -1, 1, 0, 0, 1, 0, 1], [1, -1, -1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, -1, -1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 0], [1, -1, -1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]], "mover": "black", "move": "g8", "passed": false, "black": 41, "white": 16}, {"board": [[1, -1, 1, 0, 0, 1, 0, 1], [1, -1, -1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, -1, -1, 1, 1], [1, -1, 1, -1, 1, 1, -1, 0], [1, -1, -1, -1, -1, -1, -1, -1], [1, 1, 1, 1, 1, 1, 1, 0]], "mover": "white", "move": "h7", "passed": false, "black": 36, "white": 22}, {"board": [[1, -1, 1, 0, 0, 1, 0, 1], [1, -1, -1, 1, -1, 1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, 1, 1, -1, -1, 1, 0], [1, -1, 1, 1, -1, -1, 1, 1], [1, -1, 1, -1, 1, 1, -1, 0], [1, -1, -1, -1, -1, -1, 1, -1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "black", "move": "h8", "passed": false, "black": 38, "white": 21}, {"board": [[1, -1, 1, 0, 0, 1, -1, 1], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, -1, 1, -1, 1], [1, -1, 1, -1, -1, -1, -1, 0], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, 1, 1, -1, 0], [1, -1, -1, -1, -1, -1, 1, -1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "white", "move": "g1", "passed": false, "black": 30, "white": 30}, {"board": [[1, -1, 1, 0, 0, 1, -1, 1], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, 1, 1, -1, 1], [1, -1, 1, -1, -1, 1, -1, 0], [1, -1, -1, 1, -1, -1, 1, 1], [1, -1, 1, -1, 1, 1, 1, 1], [1, -1, -1, -1, -1, -1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "black", "move": "h6", "passed": false, "black": 36, "white": 25}, {"board": [[1, -1, 1, 0, 0, 1, -1, 1], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, 1, 1, -1, 1], [1, -1, 1, -1, -1, 1, -1, -1], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, 1, -1, 1, 1], [1, -1, -1, -1, -1, -1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "white", "move": "h4", "passed": false, "black": 34, "white": 28}, {"board": [[1, -1, 1, 0, 1, 1, -1, 1], [1, -1, -1, 1, 1, -1, -1, 1], [1, -1, 1, -1, 1, 1, -1, 1], [1, -1, 1, -1, -1, 1, -1, -1], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, 1, -1, 1, 1], [1, -1, -1, -1, -1, -1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "black", "move": "e1", "passed": false, "black": 36, "white": 27}, {"board": [[1, -1, -1, -1, -1, -1, -1, 1], [1, -1, -1, -1, -1, -1, -1, 1], [1, -1, 1, -1, 1, -1, -1, 1], [1, -1, 1, -1, -1, 1, -1, -1], [1, -1, -1, 1, -1, -1, -1, 1], [1, -1, 1, -1, 1, -1, 1, 1], [1, -1, -1, -1, -1, -1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1]], "mover": "white", "move": "d1", "passed": false, "black": 30, "white": 34}]}, {"result": "black", "steps": [{"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": null, "move": null, "passed": false, "black": 2, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e6", "passed": false, "black": 4, "white": 1}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f4", "passed": false, "black": 3, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f3", "passed": false, "black": 5, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f2", "passed": false, "black": 4, "white": 4}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 1, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g2", "passed": false, "black": 6, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "h2", "passed": false, "black": 5, "white": 5}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f1", "passed": false, "black": 7, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "c6", "passed": false, "black": 4, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f5", "passed": false, "black": 7, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e7", "passed": false, "black": 5, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 1, 0, 1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d3", "passed": false, "black": 7, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 1, 0, 1, -1, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g3", "passed": false, "black": 6, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 1, 0, 1, -1, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "e8", "passed": false, "black": 10, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 1, 0, 1, -1, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "f7", "passed": false, "black": 9, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0, 1, 1, -1], [0, 0, 0, 1, 0, 1, -1, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "h1", "passed": false, "black": 11, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 1, 0, 1, -1, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "e2", "passed": false, "black": 9, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "h3", "passed": false, "black": 13, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "d7", "passed": false, "black": 12, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, -1, 0, 0], [0, 1, 0, -1, 1, 1, 0, 0], [0, 0, 1, 0, -1, 0, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "b5", "passed": false, "black": 15, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 0, -1, 1, 1], [0, 0, 0, -1, 1, -1, -1, 0], [0, 1, 0, -1, 1, -1, 0, 0], [0, 0, 1, 0, -1, 0, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "g4", "passed": false, "black": 13, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 0, -1, 1, 1], [0, 0, 0, 1, 1, -1, -1, 0], [0, 1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, -1, 0, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "d6", "passed": false, "black": 16, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 0, -1, -1, 1], [0, 0, 0, 1, 1, -1, -1, -1], [0, 1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, -1, 0, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "h4", "passed": false, "black": 15, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, -1, -1, -1], [0, 1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, -1, 0, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "e3", "passed": false, "black": 18, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 0, 1, 1, -1, -1, -1], [0, 1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, -1, 0, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "d2", "passed": false, "black": 17, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 0, 1, 1, 1, -1, -1], [0, 1, 0, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "black", "move": "f6", "passed": false, "black": 21, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 0, -1, 1, 1, -1, -1], [0, 1, -1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0]], "mover": "white", "move": "c5", "passed": false, "black": 19, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 0, -1, 1, 1, -1, -1], [0, 1, -1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0]], "mover": "black", "move": "d8", "passed": false, "black": 21, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 0, -1, 1, 1, -1, -1], [-1, -1, -1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0]], "mover": "white", "move": "a5", "passed": false, "black": 20, "white": 12}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 1, 1, 1, 1, -1, -1], [-1, -1, 1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0]], "mover": "black", "move": "c4", "passed": false, "black": 23, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 1, 1, 1, 1, -1, -1], [-1, -1, 1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "f8", "passed": false, "black": 22, "white": 12}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, 0, 1, 1, 1, 1, -1, -1], [-1, -1, 1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "g7", "passed": false, "black": 25, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, 1, -1, 1, 1, 1], [0, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "b4", "passed": false, "black": 20, "white": 16}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, 1, -1, -1, -1, -1], [-1, -1, 1, 1, 1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "c3", "passed": false, "black": 24, "white": 13}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, 1, 1, 0, 0], [0, -1, -1, -1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "b6", "passed": false, "black": 21, "white": 17}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, 1, -1, 1, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "a6", "passed": false, "black": 26, "white": 13}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, 1, -1, 1, 1, 1, 0, 0], [-1, -1, 1, 1, 1, 1, 0, 0], [-1, 0, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "a7", "passed": false, "black": 24, "white": 16}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, 1, -1, 1, 1, 1, 0, 0], [-1, 1, 1, 1, 1, 1, 0, 0], [-1, 1, 0, 1, 1, 1, 1, 0], [0, 0, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "b7", "passed": false, "black": 26, "white": 15}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, 1, 1, 0, 0], [-1, -1, 1, 1, 1, 1, 0, 0], [-1, -1, 0, 1, 1, 1, 1, 0], [0, -1, 0, 1, 1, -1, 0, 0]], "mover": "white", "move": "b8", "passed": false, "black": 23, "white": 19}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, 1, 1, 0, 0], [-1, -1, 1, 1, 1, 1, 0, 0], [-1, 1, 0, 1, 1, 1, 1, 0], [1, -1, 0, 1, 1, -1, 0, 0]], "mover": "black", "move": "a8", "passed": false, "black": 25, "white": 18}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, 1, -1, 0, 0], [-1, -1, 1, 1, -1, 1, 0, 0], [-1, -1, 0, -1, 1, 1, 1, 0], [1, -1, -1, -1, -1, -1, 0, 0]], "mover": "white", "move": "c8", "passed": false, "black": 19, "white": 25}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, 1, -1, 0, 0], [-1, -1, 1, 1, -1, 1, 0, 0], [-1, -1, 0, -1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]], "mover": "black", "move": "g8", "passed": false, "black": 25, "white": 20}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, -1, -1, 0, 0], [-1, -1, 1, 1, -1, -1, 0, 0], [-1, -1, 0, -1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "h8", "passed": false, "black": 22, "white": 24}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [0, -1, 1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, -1, -1, 0, 0], [-1, -1, 1, 1, -1, -1, 0, 0], [-1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "c7", "passed": false, "black": 24, "white": 23}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, -1, -1, -1, -1, 1, 1], [0, 0, -1, -1, -1, 1, 1, 1], [0, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, 1, -1, -1, 0, 0], [-1, -1, 1, 1, -1, -1, 0, 0], [-1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "c2", "passed": false, "black": 21, "white": 27}, {"board": [[0, 0, 0, 0, 1, 1, 0, 1], [0, 0, -1, -1, 1, 1, 1, 1], [0, 0, -1, -1, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, 1, 1, -1, 0, 0], [-1, -1, 1, 1, 1, -1, 0, 0], [-1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "e1", "passed": false, "black": 28, "white": 21}, {"board": [[0, 0, 0, -1, 1, 1, 0, 1], [0, 0, -1, -1, -1, 1, 1, 1], [0, 0, -1, -1, 1, -1, 1, 1], [0, -1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, 1, 1, -1, 0, 0], [-1, -1, 1, 1, 1, -1, 0, 0], [-1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "d1", "passed": false, "black": 26, "white": 24}, {"board": [[0, 0, 0, -1, 1, 1, 0, 1], [0, 0, -1, -1, -1, 1, 1, 1], [0, 0, -1, -1, 1, -1, 1, 1], [1, 1, 1, 1, 1, -1, -1, -1], [1, 1, -1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "a4", "passed": false, "black": 34, "white": 17}, {"board": [[0, 0, 0, -1, -1, -1, -1, 1], [0, 0, -1, -1, -1, -1, -1, 1], [0, 0, -1, -1, -1, -1, -1, 1], [1, 1, 1, -1, 1, -1, -1, -1], [1, 1, -1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "g1", "passed": false, "black": 27, "white": 25}, {"board": [[0, 0, 0, -1, -1, -1, -1, 1], [0, 1, 1, 1, 1, 1, 1, 1], [0, 0, 1, -1, -1, -1, -1, 1], [1, 1, 1, 1, 1, -1, -1, -1], [1, 1, -1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "b2", "passed": false, "black": 35, "white": 18}, {"board": [[-1, 0, 0, -1, -1, -1, -1, 1], [0, -1, 1, 1, 1, 1, 1, 1], [0, 0, -1, -1, -1, -1, -1, 1], [1, 1, 1, -1, 1, -1, -1, -1], [1, 1, -1, 1, -1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "a1", "passed": false, "black": 31, "white": 23}, {"board": [[-1, 0, 1, 1, 1, 1, 1, 1], [0, -1, 1, 1, 1, 1, 1, 1], [0, 0, -1, -1, -1, -1, -1, 1], [1, 1, 1, -1, 1, -1, -1, -1], [1, 1, -1, 1, -1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "c1", "passed": false, "black": 36, "white": 19}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [0, -1, -1, 1, 1, 1, 1, 1], [0, 0, -1, -1, -1, -1, -1, 1], [1, 1, 1, -1, 1, -1, -1, -1], [1, 1, -1, 1, -1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "b1", "passed": false, "black": 35, "white": 21}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [0, 0, -1, -1, -1, -1, -1, 1], [1, 1, 1, -1, 1, -1, -1, -1], [1, 1, -1, 1, -1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "a2", "passed": false, "black": 38, "white": 19}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 0, -1, -1, -1, -1, -1, 1], [1, -1, 1, -1, 1, -1, -1, -1], [1, 1, -1, 1, -1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "a3", "passed": false, "black": 36, "white": 22}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 0, -1, -1, 1, -1, 1, 1], [1, -1, 1, -1, 1, 1, 1, -1], [1, 1, -1, 1, 1, 1, 1, 0], [1, -1, 1, 1, 1, 1, 0, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "g5", "passed": false, "black": 44, "white": 15}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 0, -1, -1, 1, -1, 1, 1], [1, -1, 1, -1, -1, 1, 1, -1], [1, 1, -1, 1, 1, -1, 1, 0], [1, -1, -1, -1, -1, -1, -1, 0], [1, -1, 1, 1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "g6", "passed": false, "black": 38, "white": 22}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 0, -1, -1, 1, -1, 1, 1], [1, -1, 1, -1, -1, 1, 1, -1], [1, 1, -1, 1, 1, -1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 1], [1, -1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "h6", "passed": false, "black": 46, "white": 15}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 0, -1, -1, 1, -1, 1, 1], [1, -1, 1, -1, -1, 1, 1, -1], [1, 1, -1, 1, 1, -1, 1, 0], [1, 1, 1, 1, 1, 1, -1, 1], [1, -1, -1, -1, -1, -1, -1, -1], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "h7", "passed": false, "black": 40, "white": 22}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, -1, 1, 1], [1, 1, 1, -1, -1, 1, 1, -1], [1, 1, -1, 1, 1, -1, 1, 0], [1, 1, 1, 1, 1, 1, -1, 1], [1, -1, -1, -1, -1, -1, -1, -1], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "black", "move": "b3", "passed": false, "black": 44, "white": 19}, {"board": [[-1, -1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, -1, 1, 1], [1, 1, 1, -1, -1, 1, -1, -1], [1, 1, -1, 1, 1, -1, -1, -1], [1, 1, 1, 1, 1, 1, -1, -1], [1, -1, -1, -1, -1, -1, -1, -1], [1, 1, 1, 1, 1, 1, 1, -1]], "mover": "white", "move": "h5", "passed": false, "black": 41, "white": 23}]}, {"result": "black", "steps": [{"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": null, "move": null, "passed": false, "black": 2, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e6", "passed": false, "black": 4, "white": 1}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f4", "passed": false, "black": 3, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f3", "passed": false, "black": 5, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f2", "passed": false, "black": 4, "white": 4}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 1, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g2", "passed": false, "black": 6, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "h2", "passed": false, "black": 5, "white": 5}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f1", "passed": false, "black": 7, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "c6", "passed": false, "black": 4, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f5", "passed": false, "black": 7, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e7", "passed": false, "black": 5, "white": 9}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0, 1, 1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h1", "passed": false, "black": 7, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e2", "passed": false, "black": 5, "white": 11}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, 0, 1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, -1, 0, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d1", "passed": false, "black": 7, "white": 10}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, 0, 1, -1, -1, -1], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f6", "passed": false, "black": 4, "white": 14}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, 0, 1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, -1, 1, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g4", "passed": false, "black": 6, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, -1, 1, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d2", "passed": false, "black": 5, "white": 15}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c4", "passed": false, "black": 9, "white": 12}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, -1, -1], [0, 0, 0, -1, 0, 1, 0, 0], [0, 0, 1, -1, -1, 1, 1, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d3", "passed": false, "black": 7, "white": 15}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, 1, 0, 1], [0, 0, 1, -1, -1, 1, 1, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h3", "passed": false, "black": 10, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, 1, 0, 1], [0, 0, -1, -1, -1, 1, 1, 0], [0, -1, 0, -1, -1, -1, 0, 0], [0, 0, -1, 0, -1, -1, 0, 0], [0, 0, 0, 0, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "b5", "passed": false, "black": 9, "white": 15}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, 1, 0, 1], [0, 0, -1, -1, -1, 1, 1, 0], [0, -1, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d7", "passed": false, "black": 12, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, 1, 0, 1], [0, 0, -1, -1, -1, 1, 1, 0], [0, -1, 0, -1, -1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d6", "passed": false, "black": 11, "white": 15}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, 1, 0, 1], [0, 0, -1, -1, -1, 1, 1, 0], [0, -1, 0, -1, -1, 1, 0, 0], [0, 0, -1, -1, -1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f7", "passed": false, "black": 14, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, -1, 0, 1], [0, 0, -1, -1, -1, -1, 1, 0], [0, -1, 0, -1, -1, -1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "white", "move": "f8", "passed": false, "black": 8, "white": 20}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, 0, -1, 0, 1], [0, 1, 1, 1, 1, 1, 1, 0], [0, -1, 0, -1, -1, -1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "black", "move": "b4", "passed": false, "black": 13, "white": 16}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, 0, 1], [0, 1, 1, 1, -1, 1, 1, 0], [0, -1, 0, -1, -1, -1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "white", "move": "e3", "passed": false, "black": 12, "white": 18}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, 1, 0, 1], [0, 1, 1, 1, 1, 1, 1, 0], [0, -1, 0, 1, -1, -1, 0, 0], [0, 0, 1, -1, -1, -1, 0, 0], [0, 1, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "black", "move": "b7", "passed": false, "black": 17, "white": 14}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 1, 1, 1, 1, -1, 1, 0], [0, -1, 0, 1, -1, -1, 0, 0], [0, 0, 1, -1, -1, -1, 0, 0], [0, 1, 0, 1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "white", "move": "g3", "passed": false, "black": 15, "white": 17}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 0], [0, -1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, -1, -1, 0, 0], [0, 1, 1, 1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "black", "move": "c7", "passed": false, "black": 20, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 0], [0, -1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, -1, -1, 0, 0], [-1, -1, -1, -1, -1, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0]], "mover": "white", "move": "a7", "passed": false, "black": 17, "white": 17}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 0], [0, -1, 0, 1, 1, -1, 0, 0], [0, 0, 1, 1, 1, -1, 0, 0], [-1, -1, -1, 1, 1, -1, 0, 0], [0, 0, 0, 0, 1, -1, 0, 0]], "mover": "black", "move": "e8", "passed": false, "black": 21, "white": 14}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 1, 1, -1, 1, 1, 1, 0], [0, -1, 0, -1, 1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [-1, -1, -1, -1, -1, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0]], "mover": "white", "move": "d8", "passed": false, "black": 15, "white": 21}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 1, 1, -1, 1, 1, 1, 0], [0, -1, 0, -1, 1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [-1, 1, -1, -1, -1, -1, 0, 0], [1, 0, 0, -1, -1, -1, 0, 0]], "mover": "black", "move": "a8", "passed": false, "black": 17, "white": 20}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 1, 1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [-1, 1, -1, -1, -1, -1, 0, 0], [1, 0, 0, -1, -1, -1, 0, 0]], "mover": "white", "move": "h4", "passed": false, "black": 13, "white": 25}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 1, 1, -1, -1, -1, -1, -1], [0, 1, 0, -1, 1, -1, 0, 0], [1, 0, 1, -1, 1, -1, 0, 0], [1, 1, -1, -1, -1, -1, 0, 0], [1, 0, 0, -1, -1, -1, 0, 0]], "mover": "black", "move": "a6", "passed": false, "black": 16, "white": 23}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, 0, -1, -1, 1, -1, 0, 0], [1, 1, -1, -1, -1, -1, 0, 0], [1, 0, 0, -1, -1, -1, 0, 0]], "mover": "white", "move": "a4", "passed": false, "black": 12, "white": 28}, {"board": [[0, 0, 0, 1, 0, 1, 0, 1], [0, 0, 0, -1, -1, -1, 1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, 0, -1, -1, 1, -1, 0, 0], [1, 1, -1, 1, -1, -1, 0, 0], [1, 0, 1, -1, -1, -1, 0, 0]], "mover": "black", "move": "c8", "passed": false, "black": 14, "white": 27}, {"board": [[0, 0, 0, 1, 0, 1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, 0, -1, -1, 1, -1, 0, 0], [1, 1, -1, 1, -1, -1, 0, 0], [1, 0, 1, -1, -1, -1, 0, 0]], "mover": "white", "move": "g1", "passed": false, "black": 13, "white": 29}, {"board": [[0, 0, 0, 1, 0, 1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, 1, 1, 1, 1, -1, 0, 0], [1, 1, -1, 1, -1, -1, 0, 0], [1, 0, 1, -1, -1, -1, 0, 0]], "mover": "black", "move": "b6", "passed": false, "black": 16, "white": 27}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, 1, 1, 1, 1, -1, 0, 0], [1, 1, -1, 1, -1, -1, 0, 0], [1, 0, 1, -1, -1, -1, 0, 0]], "mover": "white", "move": "e1", "passed": false, "black": 15, "white": 29}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, 1, 1, 1, 1, -1, 0, 0], [1, 1, -1, 1, -1, 1, 0, 0], [1, 0, 1, 1, 1, 1, 1, 0]], "mover": "black", "move": "g8", "passed": false, "black": 20, "white": 25}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, 1, 1, 1, 1, 1, 0]], "mover": "white", "move": "b8", "passed": false, "black": 18, "white": 28}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 1, 1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, 1, 1, 1, 1, 1, 0]], "mover": "black", "move": "c3", "passed": false, "black": 24, "white": 23}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 0, -1, -1, -1, -1, 1], [0, 0, 1, 1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "h8", "passed": false, "black": 19, "white": 29}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 1, 1, 1, 1, 1, 1], [0, 0, 1, 1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, 0, -1, 1, -1, 0, 0], [1, -1, 1, 1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "c2", "passed": false, "black": 24, "white": 25}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 1, 1, 1, -1, 1, 1], [0, 0, 1, 1, -1, 1, 1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "c5", "passed": false, "black": 19, "white": 31}, {"board": [[0, 0, 0, 1, -1, -1, -1, 1], [0, 0, 1, 1, 1, -1, 1, 1], [0, 1, 1, 1, -1, 1, 1, 1], [-1, -1, 1, -1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "b3", "passed": false, "black": 22, "white": 29}, {"board": [[0, 0, -1, -1, -1, -1, -1, 1], [0, 0, -1, -1, 1, -1, 1, 1], [0, 1, -1, 1, -1, 1, 1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "c1", "passed": false, "black": 17, "white": 35}, {"board": [[0, 1, 1, 1, 1, 1, 1, 1], [0, 0, 1, -1, 1, -1, 1, 1], [0, 1, -1, 1, -1, 1, 1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "b1", "passed": false, "black": 24, "white": 29}, {"board": [[0, 1, 1, 1, 1, 1, 1, 1], [0, 0, 1, -1, 1, -1, 1, 1], [-1, -1, -1, 1, -1, 1, 1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "a3", "passed": false, "black": 23, "white": 31}, {"board": [[0, 1, 1, 1, 1, 1, 1, 1], [0, 1, 1, -1, 1, -1, 1, 1], [-1, -1, 1, 1, -1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "b2", "passed": false, "black": 26, "white": 29}, {"board": [[0, 1, 1, 1, 1, 1, 1, 1], [-1, -1, -1, -1, 1, -1, 1, 1], [-1, -1, 1, 1, -1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "a2", "passed": false, "black": 24, "white": 32}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, -1, -1, 1, -1, 1, 1], [-1, -1, 1, 1, -1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, 0, 0], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "a1", "passed": false, "black": 26, "white": 31}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, -1, -1, 1, -1, 1, 1], [-1, -1, 1, 1, -1, 1, 1, 1], [-1, -1, -1, 1, -1, -1, -1, -1], [0, -1, -1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, -1, 0], [1, -1, -1, 1, -1, -1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "g6", "passed": false, "black": 25, "white": 33}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, -1, -1], [1, 1, 1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, -1, 0], [1, -1, -1, 1, -1, -1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "a5", "passed": false, "black": 32, "white": 27}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, -1, -1], [1, 1, 1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, -1, -1, 0], [1, -1, -1, 1, -1, -1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": null, "passed": true, "black": 32, "white": 27}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, -1, -1], [1, 1, 1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, 1, 1, 1], [1, -1, -1, 1, -1, -1, 0, 0], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "h6", "passed": false, "black": 35, "white": 25}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, -1, -1], [1, 1, 1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, 1, -1, 1], [1, -1, -1, 1, -1, -1, 0, -1], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "h7", "passed": false, "black": 34, "white": 27}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, -1, -1], [1, 1, 1, 1, 1, -1, 0, 0], [1, -1, -1, -1, 1, 1, -1, 1], [1, -1, -1, 1, 1, 1, 1, -1], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "g7", "passed": false, "black": 37, "white": 25}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, -1, -1], [1, 1, 1, 1, 1, -1, -1, 0], [1, -1, -1, -1, 1, -1, -1, 1], [1, -1, -1, 1, -1, 1, 1, -1], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "g5", "passed": false, "black": 35, "white": 28}, {"board": [[1, 1, 1, 1, 1, 1, 1, 1], [1, 1, -1, -1, 1, -1, 1, 1], [1, -1, 1, 1, -1, 1, 1, 1], [1, 1, -1, 1, -1, -1, 1, 1], [1, 1, 1, 1, 1, 1, 1, 1], [1, -1, -1, -1, 1, -1, 1, 1], [1, -1, -1, 1, -1, 1, 1, -1], [1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "h5", "passed": false, "black": 41, "white": 23}]}, {"result": "white", "steps": [{"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, -1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": null, "move": null, "passed": false, "black": 2, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e6", "passed": false, "black": 4, "white": 1}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f4", "passed": false, "black": 3, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f3", "passed": false, "black": 5, "white": 2}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f2", "passed": false, "black": 4, "white": 4}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, 1, 0], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g2", "passed": false, "black": 6, "white": 3}, {"board": [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "h2", "passed": false, "black": 5, "white": 5}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f1", "passed": false, "black": 7, "white": 4}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, -1, -1, 0, 0], [0, 0, 0, -1, 1, 0, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "c6", "passed": false, "black": 4, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, -1, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "f5", "passed": false, "black": 7, "white": 6}, {"board": [[0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, 0, 0, 1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "f6", "passed": false, "black": 6, "white": 8}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, 0, 1, 1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h1", "passed": false, "black": 8, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "e2", "passed": false, "black": 6, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 0, 0, 1, 0, 0], [0, 0, 0, -1, 1, 1, 0, 0], [0, 0, 0, 1, -1, 1, 0, 0], [0, 0, 1, 0, 1, -1, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "b7", "passed": false, "black": 10, "white": 7}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "a8", "passed": false, "black": 5, "white": 13}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 0, 0, -1, 0, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 0, 1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c4", "passed": false, "black": 9, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, -1, -1], [0, 0, 0, 0, 0, -1, -1, 0], [0, 0, 1, 1, 1, -1, 0, 0], [0, 0, 0, 1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g3", "passed": false, "black": 8, "white": 12}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 0, 0, -1, -1, 1], [0, 0, 1, 1, 1, -1, 0, 0], [0, 0, 0, 1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "h3", "passed": false, "black": 11, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 0, 0, -1, -1, 1], [0, -1, -1, -1, -1, -1, 0, 0], [0, 0, 0, 1, -1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "b4", "passed": false, "black": 8, "white": 14}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 0, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 0, 0], [0, 0, 0, 1, 1, 1, 0, 0], [0, 0, -1, 0, 1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e3", "passed": false, "black": 13, "white": 10}, {"board": [[0, 0, 0, 0, 0, 1, 0, 1], [0, 0, 0, 0, -1, -1, 1, 1], [0, 0, 0, 0, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d6", "passed": false, "black": 10, "white": 14}, {"board": [[0, 0, 0, 0, 0, 1, 1, 1], [0, 0, 0, 0, -1, 1, 1, 1], [0, 0, 0, 0, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g1", "passed": false, "black": 12, "white": 13}, {"board": [[0, 0, 0, 0, 0, 1, 1, 1], [0, 0, 0, -1, -1, 1, 1, 1], [0, 0, 0, 0, -1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 0, 0], [0, 0, 0, -1, -1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d2", "passed": false, "black": 11, "white": 15}, {"board": [[0, 0, 0, 0, 0, 1, 1, 1], [0, 0, 0, -1, -1, 1, 1, 1], [0, 0, 0, 0, 1, 1, 1, 1], [0, -1, -1, 1, 1, -1, 0, 0], [0, 0, 1, 1, 1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c5", "passed": false, "black": 16, "white": 11}, {"board": [[0, 0, 0, 0, 0, 1, 1, 1], [0, 0, 0, -1, -1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d3", "passed": false, "black": 14, "white": 14}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, 1, -1, 0, 0], [0, 0, 1, -1, 1, 1, 0, 0], [0, 0, -1, -1, -1, -1, 0, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "d1", "passed": false, "black": 16, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [0, 0, -1, -1, -1, -1, -1, 0], [0, -1, 0, 0, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "g6", "passed": false, "black": 14, "white": 16}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [0, 0, -1, 1, 1, -1, -1, 0], [0, -1, 0, 0, 1, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "e7", "passed": false, "black": 17, "white": 14}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [0, 0, -1, -1, -1, -1, -1, 0], [0, -1, 0, -1, 1, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "d7", "passed": false, "black": 15, "white": 17}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, -1, 0, 0], [0, 0, 1, -1, 1, -1, 0, 0], [0, 0, 1, 1, -1, -1, -1, 0], [0, -1, 1, 1, 1, 0, 0, 0], [-1, 0, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "c7", "passed": false, "black": 19, "white": 14}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, -1, 0, 0], [0, 0, 1, -1, -1, -1, 0, 0], [0, 0, 1, -1, -1, -1, -1, 0], [0, -1, -1, 1, 1, 0, 0, 0], [-1, -1, 0, 0, 0, 0, 0, 0]], "mover": "white", "move": "b8", "passed": false, "black": 16, "white": 18}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, 1, 0, 0], [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 1, -1, -1, 1, -1, 0], [0, -1, -1, 1, 1, 0, 0, 0], [-1, -1, 0, 0, 0, 0, 0, 0]], "mover": "black", "move": "g5", "passed": false, "black": 22, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, 1, 0, 0], [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 1, -1, -1, 1, -1, 0], [0, -1, -1, 1, -1, 0, 0, 0], [-1, -1, 0, 0, 0, -1, 0, 0]], "mover": "white", "move": "f8", "passed": false, "black": 21, "white": 15}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, 1, 0, 0], [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 1, -1, 1, 1, -1, 0], [0, -1, -1, 1, 1, 0, 0, 0], [-1, -1, 0, 0, 1, -1, 0, 0]], "mover": "black", "move": "e8", "passed": false, "black": 24, "white": 13}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [0, -1, -1, -1, -1, 1, 0, 0], [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 1, -1, 1, 1, -1, 0], [0, -1, -1, -1, 1, 0, 0, 0], [-1, -1, 0, -1, -1, -1, 0, 0]], "mover": "white", "move": "d8", "passed": false, "black": 22, "white": 16}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [0, 1, -1, -1, -1, 1, 0, 0], [0, 0, 1, 1, 1, 1, 1, 0], [0, 0, 1, -1, 1, 1, -1, 0], [0, -1, -1, -1, 1, 0, 0, 0], [-1, -1, 0, -1, -1, -1, 0, 0]], "mover": "black", "move": "a3", "passed": false, "black": 24, "white": 15}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [0, 1, -1, -1, -1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 1, 0], [0, 0, 1, -1, -1, 1, -1, 0], [0, -1, -1, -1, -1, -1, 0, 0], [-1, -1, 0, -1, -1, -1, 0, 0]], "mover": "white", "move": "f7", "passed": false, "black": 21, "white": 19}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [0, 1, -1, -1, -1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 1, 0], [0, 0, 1, -1, 1, 1, -1, 0], [0, -1, 1, 1, -1, -1, 0, 0], [-1, -1, 1, -1, -1, -1, 0, 0]], "mover": "black", "move": "c8", "passed": false, "black": 25, "white": 16}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 1, 0], [0, 0, 1, -1, 1, 1, -1, 0], [0, -1, 1, 1, -1, -1, 0, 0], [-1, -1, 1, -1, -1, -1, 0, 0]], "mover": "white", "move": "a4", "passed": false, "black": 24, "white": 18}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, 1, 0, 0], [0, 0, 1, -1, 1, 1, 1, 0], [1, 0, 1, -1, 1, 1, -1, 0], [0, 1, 1, 1, -1, -1, 0, 0], [-1, -1, 1, -1, -1, -1, 0, 0]], "mover": "black", "move": "a6", "passed": false, "black": 26, "white": 17}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, 1, 0, 0], [0, -1, -1, -1, 1, 1, 1, 0], [1, 0, -1, -1, 1, 1, -1, 0], [0, 1, 1, -1, -1, -1, 0, 0], [-1, -1, 1, -1, -1, -1, 0, 0]], "mover": "white", "move": "b5", "passed": false, "black": 23, "white": 21}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, 1, 0, 0], [0, -1, -1, -1, 1, 1, 1, 0], [1, 0, -1, -1, 1, 1, -1, 0], [0, 1, 1, -1, -1, 1, 0, 0], [-1, -1, 1, 1, 1, 1, 1, 0]], "mover": "black", "move": "g8", "passed": false, "black": 28, "white": 17}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, 1, 0, 0], [0, -1, -1, -1, 1, 1, 1, 0], [1, 0, -1, -1, 1, 1, -1, 0], [0, 1, 1, -1, -1, 1, 0, 0], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "h8", "passed": false, "black": 23, "white": 23}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [1, -1, -1, -1, -1, 1, 0, 0], [1, 1, 1, 1, 1, 1, 1, 0], [1, 0, -1, -1, 1, 1, -1, 0], [0, 1, 1, -1, -1, 1, 0, 0], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "a5", "passed": false, "black": 28, "white": 19}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [1, -1, -1, -1, -1, 1, 0, 0], [1, -1, -1, 1, 1, 1, 1, 0], [1, -1, -1, -1, 1, 1, -1, 0], [0, -1, -1, -1, -1, 1, 0, 0], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "b6", "passed": false, "black": 24, "white": 24}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [0, 0, 0, -1, 1, 1, 1, 1], [1, 0, 0, -1, 1, 1, 1, 1], [1, -1, -1, 1, -1, 1, 0, 0], [1, -1, 1, 1, 1, 1, 1, 0], [1, 1, -1, -1, 1, 1, -1, 0], [1, 1, 1, 1, 1, 1, 0, 0], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "a7", "passed": false, "black": 32, "white": 17}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, 1, 0, 0], [-1, -1, 1, 1, 1, 1, 1, 0], [-1, 1, -1, -1, 1, 1, -1, 0], [-1, 1, 1, 1, 1, 1, 0, 0], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "a2", "passed": false, "black": 27, "white": 23}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, 1, 0, 0], [-1, -1, 1, 1, 1, 1, 1, 0], [-1, 1, -1, -1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 0, 0], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "h6", "passed": false, "black": 29, "white": 22}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, 1, 0, 0], [-1, -1, 1, 1, 1, -1, 1, 0], [-1, 1, -1, -1, 1, 1, -1, 1], [-1, 1, 1, 1, 1, 1, 0, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "h7", "passed": false, "black": 27, "white": 25}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, 1, 1, 0], [-1, -1, 1, 1, 1, 1, 1, 0], [-1, 1, -1, -1, 1, 1, -1, 1], [-1, 1, 1, 1, 1, 1, 0, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "g4", "passed": false, "black": 29, "white": 24}, {"board": [[0, 0, 0, 1, 0, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, 1, 1, 0], [-1, -1, 1, 1, 1, 1, 1, 0], [-1, 1, -1, -1, 1, 1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "g7", "passed": false, "black": 24, "white": 30}, {"board": [[0, 0, 1, 1, 0, 1, 1, 1], [-1, 0, 0, 1, 1, 1, 1, 1], [-1, 0, 0, -1, 1, 1, 1, 1], [-1, -1, -1, 1, -1, 1, 1, 0], [-1, -1, 1, 1, 1, 1, 1, 0], [-1, 1, -1, -1, 1, 1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "c1", "passed": false, "black": 26, "white": 29}, {"board": [[0, 0, 1, 1, 0, 1, 1, 1], [-1, 0, 0, 1, 1, 1, 1, 1], [-1, 0, -1, -1, 1, 1, 1, 1], [-1, -1, -1, -1, -1, 1, 1, 0], [-1, -1, 1, 1, -1, 1, 1, 0], [-1, 1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "c3", "passed": false, "black": 23, "white": 33}, {"board": [[0, 0, 1, 1, 0, 1, 1, 1], [-1, 0, 1, 1, 1, 1, 1, 1], [-1, 0, 1, 1, 1, 1, 1, 1], [-1, -1, 1, -1, 1, 1, 1, 0], [-1, -1, 1, 1, -1, 1, 1, 0], [-1, 1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "c2", "passed": false, "black": 28, "white": 29}, {"board": [[0, -1, 1, 1, 0, 1, 1, 1], [-1, 0, -1, 1, 1, 1, 1, 1], [-1, 0, 1, -1, 1, 1, 1, 1], [-1, -1, 1, -1, -1, 1, 1, 0], [-1, -1, 1, 1, -1, -1, 1, 0], [-1, 1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "b1", "passed": false, "black": 24, "white": 34}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, 0, -1, 1, 1, 1, 1, 1], [-1, 0, 1, -1, 1, 1, 1, 1], [-1, -1, 1, -1, -1, 1, 1, 0], [-1, -1, 1, 1, -1, -1, 1, 0], [-1, 1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "a1", "passed": false, "black": 26, "white": 33}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, -1, -1, 1, 1, 1, 1, 1], [-1, 0, -1, -1, 1, 1, 1, 1], [-1, -1, 1, -1, -1, 1, 1, 0], [-1, -1, 1, 1, -1, -1, 1, 0], [-1, 1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "b2", "passed": false, "black": 25, "white": 35}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, -1, -1, 1, 1, 0], [-1, 1, 1, 1, -1, -1, 1, 0], [-1, 1, -1, -1, 1, -1, -1, 1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": "b3", "passed": false, "black": 32, "white": 29}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, -1, -1, 1, 1, 0], [-1, 1, 1, 1, -1, -1, -1, -1], [-1, 1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "h5", "passed": false, "black": 30, "white": 32}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, -1, -1, 1, 1, 0], [-1, 1, 1, 1, -1, -1, -1, -1], [-1, 1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": null, "passed": true, "black": 30, "white": 32}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, -1, -1, -1, -1, -1], [-1, 1, 1, 1, -1, -1, -1, -1], [-1, 1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "h4", "passed": false, "black": 28, "white": 35}, {"board": [[1, 1, 1, 1, 0, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, 1, 1, 1, 1, 1], [-1, 1, 1, -1, -1, -1, -1, -1], [-1, 1, 1, 1, -1, -1, -1, -1], [-1, 1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "black", "move": null, "passed": true, "black": 28, "white": 35}, {"board": [[1, 1, 1, 1, -1, 1, 1, 1], [-1, 1, 1, -1, -1, -1, 1, 1], [-1, 1, -1, 1, -1, 1, -1, 1], [-1, -1, 1, -1, -1, -1, -1, -1], [-1, 1, 1, 1, -1, -1, -1, -1], [-1, 1, -1, -1, 1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1], [-1, -1, -1, -1, -1, -1, -1, -1]], "mover": "white", "move": "e1", "passed": false, "black": 21, "white": 43}]}]};
+  const COLS = "abcdefgh";
+  const SPEEDS = [
+    { label: "遅い", ms: 900 },
+    { label: "普通", ms: 450 },
+    { label: "速い", ms: 220 },
+    { label: "最速", ms: 90 },
+  ];
+
+  const els = {
+    board: document.getElementById("board"),
+    rowLabels: document.getElementById("rowLabels"),
+    colLabels: document.getElementById("colLabels"),
+    chips: document.getElementById("gameChips"),
+    status: document.getElementById("statusLine"),
+    blackScore: document.getElementById("blackScore"),
+    whiteScore: document.getElementById("whiteScore"),
+    scoreBarFill: document.getElementById("scoreBarFill"),
+    moveCount: document.getElementById("moveCount"),
+    scrubber: document.getElementById("scrubber"),
+    btnRestart: document.getElementById("btnRestart"),
+    btnPrev: document.getElementById("btnPrev"),
+    btnNext: document.getElementById("btnNext"),
+    btnPlay: document.getElementById("btnPlay"),
+    speedRow: document.getElementById("speedRow"),
+    kifuList: document.getElementById("kifuList"),
+  };
+
+  let gi = 0;
+  let si = 0;
+  let speedIdx = 1;
+  let playing = false;
+  let timer = null;
+  let lastMoveSquare = null;
+
+  const cellRefs = [];
+
+  function buildBoardDom() {
+    for (let r = 0; r < 8; r++) {
+      const rl = document.createElement("div");
+      rl.textContent = r + 1;
+      els.rowLabels.appendChild(rl);
+      const rowRefs = [];
+      for (let c = 0; c < 8; c++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        const slot = document.createElement("div");
+        slot.className = "disc-slot";
+        const disc = document.createElement("div");
+        disc.className = "disc";
+        const faceB = document.createElement("div");
+        faceB.className = "face face-black";
+        const faceW = document.createElement("div");
+        faceW.className = "face face-white";
+        disc.appendChild(faceB);
+        disc.appendChild(faceW);
+        slot.appendChild(disc);
+        cell.appendChild(slot);
+        els.board.appendChild(cell);
+        rowRefs.push({ cell, slot, disc });
+      }
+      cellRefs.push(rowRefs);
+    }
+    for (let c = 0; c < 8; c++) {
+      const cl = document.createElement("div");
+      cl.textContent = COLS[c];
+      els.colLabels.appendChild(cl);
+    }
+  }
+
+  function buildChips() {
+    els.chips.innerHTML = "";
+    GAMES.games.forEach((g, idx) => {
+      const chip = document.createElement("button");
+      chip.className = "chip";
+      const resultLabel = g.result === "black" ? "黒番勝ち" : g.result === "white" ? "白番勝ち" : "引き分け";
+      chip.textContent = `第${idx + 1}局 — ${resultLabel}`;
+      chip.addEventListener("click", () => selectGame(idx));
+      els.chips.appendChild(chip);
+    });
+  }
+
+  function buildSpeedButtons() {
+    els.speedRow.innerHTML = "";
+    SPEEDS.forEach((s, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "speed-btn";
+      btn.textContent = s.label;
+      btn.addEventListener("click", () => {
+        speedIdx = idx;
+        renderSpeedButtons();
+        if (playing) startTimer();
+      });
+      els.speedRow.appendChild(btn);
+    });
+    renderSpeedButtons();
+  }
+
+  function renderSpeedButtons() {
+    [...els.speedRow.children].forEach((btn, idx) => btn.classList.toggle("active", idx === speedIdx));
+  }
+
+  function buildKifu() {
+    els.kifuList.innerHTML = "";
+    const steps = GAMES.games[gi].steps;
+    for (let i = 1; i < steps.length; i++) {
+      const step = steps[i];
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      const colorLabel = step.mover === "black" ? "黒" : "白";
+      btn.innerHTML =
+        `<span class="kifu-idx">${i}</span>` +
+        `<span class="kifu-move">${step.passed ? "――" : step.move}</span>` +
+        `<span class="kifu-color">${colorLabel}${step.passed ? " (パス)" : ""}</span>`;
+      btn.addEventListener("click", () => {
+        pause();
+        si = i;
+        render();
+      });
+      li.appendChild(btn);
+      els.kifuList.appendChild(li);
+    }
+  }
+
+  function selectGame(idx) {
+    pause();
+    gi = idx;
+    si = 0;
+    lastMoveSquare = null;
+    els.scrubber.max = String(GAMES.games[gi].steps.length - 1);
+    [...els.chips.children].forEach((chip, i) => chip.classList.toggle("active", i === idx));
+    buildKifu();
+    render(true);
+  }
+
+  function squareToRC(sq) {
+    return { c: COLS.indexOf(sq[0]), r: parseInt(sq[1], 10) - 1 };
+  }
+
+  function render(jump) {
+    const game = GAMES.games[gi];
+    const step = game.steps[si];
+
+    els.board.classList.toggle("no-anim", !!jump);
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const v = step.board[r][c];
+        const ref = cellRefs[r][c];
+        ref.slot.classList.toggle("visible", v !== 0);
+        if (v !== 0) ref.disc.classList.toggle("white", v === -1);
+        ref.cell.classList.remove("last-move");
+      }
+    }
+    if (!step.passed && step.move) {
+      const { r, c } = squareToRC(step.move);
+      cellRefs[r][c].cell.classList.add("last-move");
+    }
+    if (jump) {
+      void els.board.offsetWidth;
+      els.board.classList.remove("no-anim");
+    }
+
+    els.blackScore.textContent = step.black;
+    els.whiteScore.textContent = step.white;
+    els.scoreBarFill.style.width = `${(step.black / (step.black + step.white)) * 100}%`;
+    els.moveCount.textContent = `${si} / ${game.steps.length - 1}手`;
+    els.scrubber.value = String(si);
+
+    if (si === 0) {
+      els.status.innerHTML = `初期配置 — <span class="muted">黒番から開始</span>`;
+    } else if (step.passed) {
+      const who = step.mover === "black" ? "黒" : "白";
+      els.status.innerHTML = `${who}は打てる手がなく <span class="muted">パス</span>`;
+    } else {
+      const who = step.mover === "black" ? "黒" : "白";
+      els.status.innerHTML = `${who}が <strong>${step.move}</strong> に着手`;
+    }
+    if (si === game.steps.length - 1) {
+      const resultLabel = game.result === "black" ? "黒の勝ち" : game.result === "white" ? "白の勝ち" : "引き分け";
+      els.status.innerHTML += `<br><span class="muted">対局終了 — ${resultLabel}（黒 ${step.black} - 白 ${step.white}）</span>`;
+      pause();
+    }
+
+    [...els.kifuList.children].forEach((li, idx0) => {
+      const isActive = idx0 + 1 === si;
+      li.classList.toggle("active", isActive);
+      if (isActive) li.scrollIntoView({ block: "nearest" });
+    });
+  }
+
+  function step(delta) {
+    const game = GAMES.games[gi];
+    si = Math.max(0, Math.min(game.steps.length - 1, si + delta));
+    render();
+  }
+
+  function startTimer() {
+    clearInterval(timer);
+    timer = setInterval(() => {
+      const game = GAMES.games[gi];
+      if (si >= game.steps.length - 1) { pause(); return; }
+      si += 1;
+      render();
+    }, SPEEDS[speedIdx].ms);
+  }
+
+  function play() {
+    const game = GAMES.games[gi];
+    if (si >= game.steps.length - 1) { si = 0; }
+    playing = true;
+    els.btnPlay.textContent = "⏸";
+    startTimer();
+  }
+
+  function pause() {
+    playing = false;
+    els.btnPlay.textContent = "▶";
+    clearInterval(timer);
+  }
+
+  els.btnPlay.addEventListener("click", () => (playing ? pause() : play()));
+  els.btnRestart.addEventListener("click", () => { pause(); si = 0; render(true); });
+  els.btnPrev.addEventListener("click", () => { pause(); step(-1); });
+  els.btnNext.addEventListener("click", () => { pause(); step(1); });
+  els.scrubber.addEventListener("input", () => {
+    pause();
+    si = parseInt(els.scrubber.value, 10);
+    render(true);
+  });
+
+  buildBoardDom();
+  buildChips();
+  buildSpeedButtons();
+  selectGame(0);
+</script>
+</body>
+</html>
